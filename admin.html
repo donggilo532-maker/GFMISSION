@@ -7,7 +7,7 @@
 header{padding:20px;background:var(--green);color:white}header .wrap,main{max-width:1050px;margin:auto}header h1{font-size:23px;margin:0}header a{color:#f9e0a4}main{padding:24px 16px}section{background:white;border:1px solid #e0e7e1;border-radius:16px;padding:24px;margin-bottom:22px}
 h2{font-size:21px;margin:0 0 12px}label{display:block;margin:10px 0 4px;font-weight:700}input,textarea,select{width:100%;padding:11px;border:1px solid #96afa5;border-radius:8px;font:inherit;background:white}textarea{min-height:85px}
 button{font:inherit;cursor:pointer;background:var(--green);color:white;padding:10px 18px;border:0;border-radius:8px;margin:12px 8px 5px 0}button.secondary{background:#e4e9e5;color:var(--green)}button.danger{background:#923f38}
-.notice{background:#fff6df;border-left:4px solid #c18c35;padding:15px;margin:14px 0}.error{color:#a42828}.ok{color:#166947}.muted{color:#587167;font-size:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}
+.file-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;font-size:13px}.file-links a{color:#075d72;text-decoration:underline}.file-preview{display:flex;gap:15px;flex-wrap:wrap;margin:8px 0;font-size:14px}.file-preview a{color:#075d72;text-decoration:underline}button:disabled{opacity:.55;cursor:wait}.notice{background:#fff6df;border-left:4px solid #c18c35;padding:15px;margin:14px 0}.error{color:#a42828}.ok{color:#166947}.muted{color:#587167;font-size:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}
 table{border-collapse:collapse;width:100%;min-width:720px}td,th{border-bottom:1px solid #e6eae6;padding:9px;text-align:left}.scroller{overflow:auto}.hidden{display:none!important}
 @media(max-width:650px){.grid{grid-template-columns:1fr}section{padding:17px}}
 </style></head><body>
@@ -19,7 +19,7 @@ table{border-collapse:collapse;width:100%;min-width:720px}td,th{border-bottom:1p
 <label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" required><button type="submit">로그인</button></form>
 <p id="login-status" aria-live="polite"></p></section>
 <section id="dashboard" class="hidden"><h2>주보·설교 게시 관리</h2><p id="current-user"></p><button id="logout" type="button" class="secondary">로그아웃</button>
-<p class="notice">공개 버튼을 켜고 저장하면 게시됩니다. 교회 측에서 공개를 승인한 정보·이미지·PDF만 업로드하세요. 관리자 권한은 서버의 접근 정책(RLS)으로 제한됩니다.</p>
+<p class="notice">공개 버튼을 켜고 저장하면 게시됩니다. 비공개 글에 올린 파일도 공개 저장소의 주소를 알면 열람할 수 있으므로, 교회 측에서 공개를 승인한 이미지·PDF만 업로드하세요. 관리자 권한은 서버의 접근 정책(RLS)으로 제한됩니다.</p>
 <form id="editor" class="grid">
 <input type="hidden" id="record-id">
 <div><label for="category">구분</label><select id="category"><option value="bulletin">주보</option><option value="sermon">설교</option></select></div>
@@ -29,9 +29,10 @@ table{border-collapse:collapse;width:100%;min-width:720px}td,th{border-bottom:1p
 <div><label for="preacher">설교자 (설교만)</label><input id="preacher" maxlength="100"></div>
 <div class="full"><label for="scripture">성경 본문 (설교만)</label><input id="scripture" maxlength="200"></div>
 <div class="full"><label for="summary">내용 요약</label><textarea id="summary" maxlength="2000"></textarea></div>
-<div class="full"><label for="video-url">설교 영상 주소 (HTTPS)</label><input id="video-url" type="url" placeholder="https://www.youtube.com/..."></div>
+<div class="full"><p class="muted">설교 동영상이 없어도 날짜·제목·본문·요약만으로 등록할 수 있습니다.</p><label for="video-url">설교 영상 주소 (선택, HTTPS)</label><input id="video-url" type="url" placeholder="https://www.youtube.com/..."></div>
 <div><label for="image-file">주보 이미지 업로드</label><input id="image-file" type="file" accept="image/jpeg,image/png,image/webp"></div>
 <div><label for="pdf-file">주보 PDF 업로드</label><input id="pdf-file" type="file" accept="application/pdf"></div>
+<div class="full"><p class="muted">기존 첨부파일은 수정 시 아래 링크에서 확인할 수 있습니다. 파일을 새로 고르지 않으면 기존 파일은 유지됩니다.</p><div id="file-preview" class="file-preview" aria-live="polite"></div></div>
 <div class="full"><label><input id="published" type="checkbox" style="width:auto"> 승인 후 공개 게시</label></div>
 <div class="full"><button type="submit">저장</button><button type="button" id="new" class="secondary">새 글 입력</button></div>
 </form><p id="editor-status" aria-live="polite"></p></section>
