@@ -1,0 +1,26 @@
+# Supabase 무료 플랜 자동 일시중지(7일 미사용) 방지용 백업 호출.
+# 1차는 Vercel cron(/api/keepalive, 매일)이고, 이 워크플로는 3일마다 한 번 더 호출합니다.
+# 참고: GitHub는 저장소에 60일간 커밋이 없으면 예약 실행을 자동으로 끕니다.
+#       그때는 Actions 탭에서 "Enable workflow"를 누르거나 아무 파일이나 한 번 수정하면 다시 켜집니다.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "30 20 */3 * *"   # UTC 20:30 = 한국 05:30, 3일마다
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Call Supabase REST (read-only)
+        run: |
+          node -e '
+            const c = require("./site-config.js");
+            const url = c.supabaseUrl + "/rest/v1/church_content?select=id&limit=1";
+            fetch(url, { headers: { apikey: c.publishableKey } }).then(async r => {
+              console.log("status", r.status, (await r.text()).slice(0, 200));
+              if (!r.ok) process.exit(1);
+            }).catch(e => { console.error(e); process.exit(1); });
+          '
