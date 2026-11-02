@@ -1,44 +1,49 @@
-# 굳프랜드교회 홈페이지 v1.2 — 관리자 인증 기반 준비 패키지
+# 굳프랜드교회 홈페이지 (GOOD FRIEND MISSION CHURCH)
 
-**상태:** 개발/검토용. 아직 교회용 Supabase 계정이 연결되지 않았으며 서버 정책도 적용되지 않았습니다. 정상 운영 중인 v1.1을 대체하지 마세요. 먼저 Preview에서 검증해야 합니다.
+- 홈페이지: https://gfmission.vercel.app (이 저장소의 `main` 브랜치가 Vercel로 자동 배포됩니다)
+- 관리자 페이지: https://gfmission.vercel.app/admin.html
+- 백엔드: Supabase 프로젝트 `uxthtymeawaegwwtrlra` (주보·설교 데이터, 관리자 로그인, 파일 저장소)
 
-## 기존 홈페이지 보호
-- 기존 `index.html`의 디자인/메뉴/구원의 방주 이미지를 그대로 유지합니다.
-- `site-config.js` 기본 `enabled:false`: 현재 `content.json`에서 주보 목록 1건과 설교 목록 0건을 읽습니다.
-- 관리자 페이지 `/admin.html`은 인증 미설정 시 로그인 폼을 표시하지 않습니다. 현재 v1.1의 로컬 초안 편집 도우미와 다릅니다.
-- 운영 배포 전 기존 GitHub 커밋 SHA를 기록하고 별도 개발 브랜치 `feat/gfmission-v12-admin`에서 검증하세요.
+## 매주 주보 올리는 법 (코드 수정 없음)
+1. 휴대폰 또는 PC에서 `admin.html`에 접속해 관리자 이메일/비밀번호로 로그인합니다.
+2. 날짜가 자동으로 주일로, 호수(`연도-주차`)와 제목이 자동으로 채워집니다. 필요하면 고칩니다.
+3. **주보 이미지 업로드**에서 주보 사진(휴대폰으로 찍은 사진 그대로 가능)이나 PDF를 고릅니다. 큰 사진은 자동으로 줄여서 올립니다.
+4. **저장**을 누르면 홈페이지 "주보 모아보기"와 "이번 주 주보"에 바로 표시됩니다. (비공개로 두려면 "승인 후 공개 게시" 체크를 해제)
+5. 잘못 올렸으면 아래 "등록된 자료" 표에서 **수정** 또는 **삭제**합니다.
 
-## 구현된 기능 (백엔드가 준비된 후 활성화됨)
-1. Supabase 이메일/비밀번호 로그인, 교회 관리자 허용목록 `church_admins` 추가 확인.
-2. 관리자 전용 주보·설교 신규 등록, 수정, 삭제, 비공개/공개 관리.
-3. 교회 승인 자료 JPG/PNG/WebP/PDF 업로드 (10MB 제한), HTTPS 설교 영상 링크 등록.
-4. 공개 게시물만 사이트에서 조회. RLS 서버 정책으로 미승인 사용자 수정 차단.
+설교도 같은 화면에서 구분을 "설교"로 바꾸고 날짜·제목·설교자·본문·영상 주소(YouTube 등 https 링크)를 넣어 저장하면 됩니다.
 
-## 활성화 절차 (교회 책임자 검토 후)
-1. **신규 독립 Supabase 프로젝트**를 생성합니다. BCM, BARO, 연구소와 동일 DB를 쓰지 마세요.
-2. SQL Editor에서 `SUPABASE_SETUP.sql`을 적용합니다.
-3. Authentication > Providers에서 공개 이메일 회원가입을 비활성화하고 운영 계정을 관리자에게만 발급합니다. 계정 이메일 인증·MFA 설정을 권장합니다.
-4. Authentication > Users에서 관리자 사용자를 생성/초대한 후 UUID를 확인해 `church_admins`에 추가합니다.
-5. Project Settings > API에서 URL과 **publishable/anon(공개 가능) 키**를 가져와 `site-config.js`에 입력합니다. `service_role`/secret은 절대 파일·GitHub에 넣지 마세요.
-6. `enabled:true`로 바꿔 Preview에 배포합니다. 관리자 로그인/권한 없는 계정 차단/등록/비공개/공개/업로드/삭제/PC·모바일/비정상 세션 만료를 점검합니다.
-7. 기존 `2026-10-18` 주보는 백엔드에 한 번만 이관합니다. 검증 후 운영으로 승격합니다.
+## 관리자 추가/변경 (Supabase 대시보드)
+1. Authentication > Users > **Add user**로 이메일·비밀번호 계정을 만듭니다 (Auto Confirm 체크).
+2. SQL Editor에서 아래를 실행해 관리자 목록에 등록합니다 (이메일만 바꾸면 됩니다).
+   ```sql
+   insert into public.church_admins (user_id, active)
+   select id, true from auth.users where email = '관리자이메일@example.com'
+   on conflict (user_id) do update set active = true;
+   ```
+3. 권한을 거두려면 `update public.church_admins set active = false where user_id = '...'` 로 비활성화합니다.
+4. Authentication > Sign In / Providers > Email에서 **Allow new users to sign up은 꺼 두세요.** (관리자는 위 절차로만 발급)
 
-## 검증 시 꼭 확인할 점
-- SQL은 전용 빈 Supabase 프로젝트에서 검토·실행해야 합니다. 본 패키지는 실서버에서 실행·검증되지 않았습니다.
-- RLS(Row Level Security, 데이터베이스 행별 접근 제한 정책)가 권한 제어의 핵심입니다. 브라우저 UI를 숨기는 것만으로는 보안이 되지 않습니다.
-- `church-assets` 버킷은 공개 파일용입니다. 비공개 문서 또는 개인정보가 있는 주보는 올리지 마세요. 공개 전에 반드시 교회 담당자가 승인해야 합니다.
-- 관리자 계정이 없는 상태에서는 로그인할 수 없습니다. 개발자 임시 비밀번호/공통 관리자 비밀번호는 만들지 않았습니다.
-- 기존 v1.1 `content.json`은 DB 활성화 후에는 더 이상 게시 데이터로 사용하지 않습니다. 최신 주보 이관 전 활성화하면 목록이 비어 보일 수 있습니다.
-- 고급 기능: 향후 업로드 파일 정리·사용자 역할 관리·감사 로그·정기 백업 정책 추가 권장.
+## 자동 깨우기 (Supabase 무료 플랜 일시중지 방지)
+Supabase 무료 플랜은 7일간 API 호출이 없으면 프로젝트가 자동으로 일시중지되고, 그러면 주보 목록을 DB에서 읽지 못합니다 (2026-11-02 실제 발생 → 11-03 복구).
+- `api/keepalive.js` + `vercel.json`: Vercel cron이 **매일** 공개 테이블을 한 번 읽습니다. 상태 확인: https://gfmission.vercel.app/api/keepalive
+- `.github/workflows/supabase-keepalive.yml`: GitHub Actions가 **3일마다** 한 번 더 호출합니다 (백업). GitHub는 60일간 커밋이 없으면 예약 실행을 끄므로, 그때는 Actions 탭에서 다시 켜 주세요.
+- 혹시 다시 멈추더라도 홈페이지는 `content.json`의 주보를 대신 보여주므로 오류 화면은 뜨지 않습니다. 대시보드에서 **Restore project**를 누르면 복구됩니다.
 
-## 기본 파일
-- `index.html` : v1.1 UI + 설정에 따라 기존 JSON/승인형 데이터베이스 읽기
-- `admin.html` : 관리자 로그인/콘텐츠 CRUD 폼(설정 미연결 시 로그인 비활성)
-- `admin-secure.js` : 서버 인증 기반 관리자 기능
-- `site-config.js` : 독립 Supabase 공개 설정값; 기본 기능 OFF
-- `content.json` : 구버전 호환 및 안전한 초기 화면용 게시자료
-- `SUPABASE_SETUP.sql` : 스키마·RLS·파일 저장소 접근 정책
+## 파일 구성
+- `index.html` : 홈페이지. Supabase에서 공개 주보·설교를 읽고, 실패하거나 비어 있으면 `content.json`을 사용
+- `admin.html` / `admin-secure.js` : 관리자 로그인, 주보·설교 등록/수정/삭제, 사진·PDF 업로드(자동 축소)
+- `site-config.js` : Supabase 주소와 공개(publishable) 키. `service_role`/secret 키는 절대 넣지 마세요
+- `content.json` : DB가 비어 있거나 연결이 안 될 때 보여줄 예비 게시자료 (2026-10-18 주보)
+- `SUPABASE_SETUP.sql` : 테이블·RLS 정책·`church-assets` 공개 버킷 설정 (이미 적용됨)
+- `api/keepalive.js`, `vercel.json`, `.github/workflows/supabase-keepalive.yml` : 자동 깨우기
+- `20261018_*.png` : 2026-10-18 주보 사진 원본
 
-## 진행 상태
-- 로컬 정적 화면/JSON 표시/PC 1440px·모바일 390px·375px 오버플로 점검 PASS. 미설정 관리자 로그인 비활성 PASS. 샘플 데이터 기반 공개 REST 표시 PASS. (실 Supabase 연동 전 검증)
-- 실운영 DB·Auth·Storage 연동은 **미완료**(사전 승인 및 접속 정보 필요).
+## 보안 메모
+- 권한 제어의 핵심은 서버의 RLS 정책입니다. `church_admins`에 등록된 계정만 등록·수정·삭제할 수 있고, 방문자는 `published = true`인 자료만 읽습니다.
+- `church-assets` 버킷은 공개 파일용입니다. 개인정보가 담긴 문서는 올리지 마세요. 비공개 글에 첨부한 파일도 주소를 알면 열립니다.
+- 공용 관리자 비밀번호를 만들지 말고, 담당자별 계정을 발급하세요.
+
+## 이력
+- 2026-10-18 v1.1 정적 홈페이지 + v1.2 관리자 인증 패키지 업로드, Supabase 연결(`enabled:true`)
+- 2026-11-03 Supabase 일시중지로 주보 목록 오류 → `content.json` 자동 대체, 프로젝트 복구, 자동 깨우기 추가, 관리자 페이지 입력 자동화(주일 날짜·호수·제목)와 사진 자동 축소
