@@ -333,29 +333,43 @@
     };
     // v1.2: Authentication/DB remain disabled until the church provisions its own Supabase.
     // Without configuration, continue reading the proven v1.1 content.json.
-    const loadData = async () => {
-      const conf = window.GFMISSION_CONFIG || {};
-      if (conf.enabled) {
-        if (!/^https:\/\/[a-z0-9.-]+\.supabase\.co$/i.test(conf.supabaseUrl || '') || !conf.publishableKey) {
-          throw new Error('Invalid Supabase settings');
-        }
-        // Public published records only. Backend RLS is the actual security boundary.
-        const endpoint = conf.supabaseUrl + '/rest/v1/church_content?select=*&published=eq.true&order=event_date.desc&limit=100';
-        const response = await fetch(endpoint, {cache:'no-store',headers:{'apikey':conf.publishableKey}});
-        if(!response.ok) throw new Error('Content API HTTP '+response.status);
-        const rows = await response.json();
-        if(!Array.isArray(rows)) throw new Error('Invalid content format');
-        const asItem = row => ({
-          id:row.id,date:row.event_date,issue:row.issue,title:row.title,summary:row.summary,
-          image:row.image_url,pdf:row.pdf_url,url:row.video_url,
-          speaker:row.preacher,scripture:row.scripture,published:row.published
-        });
-        return {bulletins:rows.filter(r=>r.category==='bulletin').map(asItem),
-                sermons:rows.filter(r=>r.category==='sermon').map(asItem)};
+    // 1) Supabase(설정된 경우) → 2) 실패 시 content.json 순서로 읽습니다.
+    //    Supabase 프로젝트가 일시중지/삭제되어도 방문자에게는 content.json의 주보가 표시됩니다.
+    const loadFromSupabase = async conf => {
+      if (!/^https:\/\/[a-z0-9.-]+\.supabase\.co$/i.test(conf.supabaseUrl || '') || !conf.publishableKey) {
+        throw new Error('Invalid Supabase settings');
       }
+      // Public published records only. Backend RLS is the actual security boundary.
+      const endpoint = conf.supabaseUrl + '/rest/v1/church_content?select=*&published=eq.true&order=event_date.desc&limit=100';
+      const response = await fetch(endpoint, {cache:'no-store',headers:{'apikey':conf.publishableKey}});
+      if(!response.ok) throw new Error('Content API HTTP '+response.status);
+      const rows = await response.json();
+      if(!Array.isArray(rows)) throw new Error('Invalid content format');
+      const asItem = row => ({
+        id:row.id,date:row.event_date,issue:row.issue,title:row.title,summary:row.summary,
+        image:row.image_url,pdf:row.pdf_url,url:row.video_url,
+        speaker:row.preacher,scripture:row.scripture,published:row.published
+      });
+      return {bulletins:rows.filter(r=>r.category==='bulletin').map(asItem),
+              sermons:rows.filter(r=>r.category==='sermon').map(asItem)};
+    };
+    const loadFromJson = async () => {
       const response=await fetch('./content.json',{cache:'no-store'});
       if(!response.ok) throw new Error('content.json HTTP '+response.status);
       return response.json();
+    };
+    const loadData = async () => {
+      const conf = window.GFMISSION_CONFIG || {};
+      if (conf.enabled) {
+        try {
+          const data = await loadFromSupabase(conf);
+          // DB가 비어 있으면(아직 주보 이관 전) content.json을 대신 보여줍니다.
+          if (data.bulletins.length || data.sermons.length) return data;
+        } catch (err) {
+          console.warn('Supabase 연결 실패, content.json으로 대체합니다:', err && err.message);
+        }
+      }
+      return loadFromJson();
     };
     loadData().then(data=>{bulletins(sortedPublic(data.bulletins));sermons(sortedPublic(data.sermons));})
       .catch(()=>{
