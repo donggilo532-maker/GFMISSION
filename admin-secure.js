@@ -10,6 +10,55 @@ if(!/^https:\/\/[a-z0-9.-]+\.supabase\.co$/i.test(c.supabaseUrl||'')||!c.publish
 }
 const db=window.supabase.createClient(c.supabaseUrl,c.publishableKey);
 let user=null,entries=[],saving=false;
+
+// ---------- 날짜·호수 자동 계산 (주보 등록을 쉽게 하기 위한 도우미) ----------
+const pad=n=>String(n).padStart(2,'0');
+const fmt=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayLocal=()=>fmt(new Date());
+// 주보 기본 날짜: 목~토요일이면 다가오는 주일, 일요일이면 오늘, 월~수요일이면 지난 주일
+const defaultSunday=()=>{const d=new Date();const dow=d.getDay();const delta=dow===0?0:(dow>=4?7-dow:-dow);d.setDate(d.getDate()+delta);return fmt(d);};
+// 주보 호수: ISO 주차 기준 "연도-주차" (예: 2026-10-18 → 2026-42)
+const isoWeekIssue=dateStr=>{
+ const [y,m,dd]=(dateStr||'').split('-').map(Number);if(!y||!m||!dd)return '';
+ const d=new Date(Date.UTC(y,m-1,dd));const dow=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()+4-dow);
+ const yearStart=new Date(Date.UTC(d.getUTCFullYear(),0,1));const week=Math.ceil(((d-yearStart)/86400000+1)/7);
+ return `${d.getUTCFullYear()}-${pad(week)}`;
+};
+const autoTitle=dateStr=>{const [y,m,d]=(dateStr||'').split('-').map(Number);return y?`${y}년 ${m}월 ${d}일 주일 주보`:'';};
+// 사용자가 직접 고치지 않은 칸(data-auto="1")만 자동으로 채웁니다.
+const autoFill=()=>{
+ if($('category').value!=='bulletin')return;
+ const date=$('event-date').value;if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return;
+ const issue=$('issue'),title=$('title');
+ if(!issue.value||issue.dataset.auto==='1'){issue.value=isoWeekIssue(date);issue.dataset.auto='1';}
+ if(!title.value||title.dataset.auto==='1'){title.value=autoTitle(date);title.dataset.auto='1';}
+};
+$('event-date').addEventListener('change',autoFill);
+$('category').addEventListener('change',autoFill);
+$('issue').addEventListener('input',()=>{$('issue').dataset.auto='0';});
+$('title').addEventListener('input',()=>{$('title').dataset.auto='0';});
+// 화면 안내 문구 (admin.html 수정 없이 보강)
+$('issue').previousElementSibling.textContent='주보 호수 (날짜에서 자동 계산, 수정 가능)';
+$('image-file').insertAdjacentHTML('afterend','<p class="muted">휴대폰으로 찍은 주보 사진을 그대로 올려도 됩니다. 큰 사진은 자동으로 줄여서(최대 2000px, JPG) 업로드합니다.</p>');
+
+// ---------- 휴대폰 사진 자동 축소 (10MB 제한·업로드 속도 대응) ----------
+const MAX_EDGE=2000, TARGET_BYTES=1.5*1024*1024;
+const loadImage=file=>new Promise((ok,fail)=>{const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);ok(img);};img.onerror=()=>{URL.revokeObjectURL(url);fail(Error('이미지를 읽을 수 없습니다.'));};img.src=url;});
+async function shrinkImage(file){
+ if(!file||!/^image\//.test(file.type))return file;
+ let img;try{img=await loadImage(file);}catch{return file;}
+ const w=img.naturalWidth,h=img.naturalHeight;
+ if(!w||!h)return file;
+ const scale=Math.min(1,MAX_EDGE/Math.max(w,h));
+ if(scale===1&&file.size<=TARGET_BYTES)return file; // 이미 작으면 그대로 사용
+ const canvas=document.createElement('canvas');canvas.width=Math.round(w*scale);canvas.height=Math.round(h*scale);
+ canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+ const blob=await new Promise(ok=>canvas.toBlob(ok,'image/jpeg',0.85));
+ if(!blob)return file;
+ const name=(file.name||'bulletin').replace(/\.[^.]+$/,'')+'.jpg';
+ return new File([blob],name,{type:'image/jpeg',lastModified:Date.now()});
+}
+
 // Only render links inside this project's public church-assets bucket.
 const safeAssetUrl=value=>{
   try{
@@ -33,12 +82,15 @@ const showFiles=entry=>{
 };
 
 const clean=()=>{
- $('record-id').value='';$('editor').reset();$('event-date').value=todayLocal();
+ $('record-id').value='';$('editor').reset();
+ $('category').value='bulletin';$('event-date').value=defaultSunday();
+ $('issue').value='';$('issue').dataset.auto='1';$('title').value='';$('title').dataset.auto='1';
+ autoFill();
+ $('published').checked=true; // 새 주보는 저장 시 바로 공개(저장 전에 확인창이 한 번 뜹니다)
  showFiles(null);
 };
 const validHttps=s=>!s||(()=>{try{return new URL(s).protocol==='https:'}catch{return false}})();
 const scrub=s=>(s||'').trim();
-const todayLocal=()=>{const d=new Date();const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;};
 const canEdit=async u=>{
  if(!u)return false;
  const {data,error}=await db.from('church_admins').select('user_id').eq('user_id',u.id).eq('active',true).maybeSingle();
@@ -66,6 +118,7 @@ const actions=row.insertCell();
      $('title').value=entry.title;$('issue').value=entry.issue||'';$('preacher').value=entry.preacher||'';
      $('scripture').value=entry.scripture||'';$('summary').value=entry.summary||'';
 $('video-url').value=entry.video_url||'';$('published').checked=!!entry.published;
+$('issue').dataset.auto='0';$('title').dataset.auto='0';
 $('image-file').value='';$('pdf-file').value='';showFiles(entry);
 message('editor-status','기존 글 수정 중입니다. 파일을 다시 선택하지 않으면 이전 첨부파일을 유지합니다.');
 $('editor').scrollIntoView({behavior:'smooth'});
@@ -106,9 +159,10 @@ $('login-form').addEventListener('submit',async e=>{
 $('logout').addEventListener('click',async()=>{await db.auth.signOut();user=null;show('dashboard',false);show('records',false);show('login',true);message('login-status','로그아웃했습니다.');});
 $('new').addEventListener('click',clean);
 async function upload(input,category,date){
- const file=input.files?.[0];if(!file)return null;
+ let file=input.files?.[0];if(!file)return null;
+ if(input.id==='image-file')file=await shrinkImage(file);
  const allowed=input.id==='pdf-file'?['application/pdf']:['image/jpeg','image/png','image/webp'];
- if(!allowed.includes(file.type))throw Error('허용되지 않는 파일 형식입니다.');
+ if(!allowed.includes(file.type))throw Error('허용되지 않는 파일 형식입니다. (JPG·PNG·WebP 사진 또는 PDF)');
  if(file.size>10*1024*1024)throw Error('파일은 10MB 이하만 허용합니다.');
  const ext={'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type];
  const uuid=crypto.randomUUID();const path=`${category}/${date}/${uuid}.${ext}`;
